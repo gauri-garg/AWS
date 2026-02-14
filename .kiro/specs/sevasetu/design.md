@@ -2,9 +2,30 @@
 
 ## Overview
 
-SevaSetu is a serverless voice assistant application built entirely on AWS free tier services that enables rural Indian citizens to access government scheme information through voice interactions in multiple Indian regional languages including Hindi, Marathi, Tamil, Telugu, Bengali, Kannada, Malayalam, Gujarati, Punjabi, Odia, and Assamese. The system leverages AWS Lambda for compute, API Gateway for request routing, S3 for document storage, DynamoDB for user history, and AWS AI services for language processing.
+SevaSetu is a serverless voice assistant application built entirely on AWS free tier services that enables rural Indian citizens to access government scheme information through voice interactions in regional languages. The system initially supports Hindi and Marathi as specified in the requirements, with the architecture designed to support additional Indian languages (Tamil, Telugu, Bengali, Kannada, Malayalam, Gujarati, Punjabi, Odia, and Assamese) in future phases.
 
-The architecture is specifically designed to operate within AWS free tier limits while maintaining functionality and user experience. The system implements aggressive caching, request throttling, and usage monitoring to stay within free tier boundaries. The system processes voice queries through a pipeline: speech-to-text conversion, scheme retrieval, AI summarization, and text-to-speech response generation, all while maintaining language consistency throughout the interaction.
+The system leverages AWS Lambda for compute, API Gateway for request routing, S3 for document storage, DynamoDB for user history, and AWS AI services for language processing. The architecture is specifically designed to operate within AWS free tier limits while maintaining functionality and user experience.
+
+**Key Design Decision - AI Summarization**: The requirements specify using Amazon Bedrock for AI summarization (Requirement 4). However, Amazon Bedrock is not available in the AWS free tier. To stay within free tier constraints, this design uses **Amazon Comprehend** (50K units/month free) for entity extraction combined with rule-based extractive summarization. This approach provides simplified summaries while remaining cost-free. If budget becomes available, the system can be upgraded to use Amazon Bedrock for higher-quality abstractive summarization.
+
+The system implements aggressive caching, request throttling, and usage monitoring to stay within free tier boundaries. The system processes voice queries through a pipeline: speech-to-text conversion, scheme retrieval, AI summarization, and text-to-speech response generation, all while maintaining language consistency throughout the interaction.
+
+## Requirements Coverage
+
+This design addresses all 12 requirements from the requirements document:
+
+1. **Requirement 1 (Voice Input Processing)**: Handled by Voice Input Handler and Speech-to-Text Lambda using AWS Transcribe
+2. **Requirement 2 (Language Detection and Consistency)**: Language detection in Speech-to-Text Lambda, consistency maintained throughout pipeline
+3. **Requirement 3 (Scheme Information Retrieval)**: Implemented by Scheme Retriever Lambda accessing S3 bucket
+4. **Requirement 4 (AI-Powered Summarization)**: Implemented by AI Summarizer Lambda using Amazon Comprehend (free tier alternative to Bedrock)
+5. **Requirement 5 (Voice Response Generation)**: Handled by Text-to-Speech Lambda using AWS Polly
+6. **Requirement 6 (User History Management)**: Implemented by History Manager Lambda writing to DynamoDB
+7. **Requirement 7 (Serverless Architecture)**: Entire system built on AWS Lambda, API Gateway, S3, and DynamoDB
+8. **Requirement 8 (Low Latency Optimization)**: Aggressive caching strategy, audio compression, and optimized Lambda configurations
+9. **Requirement 9 (Security and Authentication)**: API Gateway authentication, TLS encryption, IAM roles, data encryption at rest
+10. **Requirement 10 (High Availability and Reliability)**: Multi-AZ Lambda deployment, DynamoDB replication, retry logic
+11. **Requirement 11 (Scalability)**: Auto-scaling Lambda, on-demand DynamoDB, throttling mechanisms
+12. **Requirement 12 (Error Handling and User Feedback)**: Comprehensive error handling with language-specific messages, CloudWatch logging
 
 ## Architecture
 
@@ -171,18 +192,11 @@ All services are selected to operate within AWS free tier limits:
 **Implementation Details**:
 - Use AWS Transcribe StartTranscriptionJob for async processing
 - For low latency, use StartStreamTranscription for real-time processing
-- Support language identification for all major Indian languages:
-  - Hindi (hi-IN)
-  - Marathi (mr-IN)
-  - Tamil (ta-IN)
-  - Telugu (te-IN)
-  - Bengali (bn-IN)
-  - Kannada (kn-IN)
-  - Malayalam (ml-IN)
-  - Gujarati (gu-IN)
-  - Punjabi (pa-IN)
-  - Odia (or-IN)
-  - Assamese (as-IN)
+- **Phase 1 (MVP)**: Support Hindi (hi-IN) and Marathi (mr-IN) as specified in requirements
+- **Phase 2 (Future)**: Expand to additional Indian languages:
+  - Tamil (ta-IN), Telugu (te-IN), Bengali (bn-IN)
+  - Kannada (kn-IN), Malayalam (ml-IN), Gujarati (gu-IN)
+  - Punjabi (pa-IN), Odia (or-IN), Assamese (as-IN)
 - Implement audio preprocessing for noise reduction if needed
 - **Free Tier Optimization**: Cache transcriptions aggressively (60 min/month = ~2 min/day limit)
 
@@ -230,33 +244,8 @@ schemes/
   ├── marathi/
   │   ├── scheme-1.json
   │   └── scheme-2.json
-  ├── tamil/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
-  ├── telugu/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
-  ├── bengali/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
-  ├── kannada/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
-  ├── malayalam/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
-  ├── gujarati/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
-  ├── punjabi/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
-  ├── odia/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
-  ├── assamese/
-  │   ├── scheme-1.json
-  │   └── scheme-2.json
+  ├── [future-languages]/
+  │   └── [future expansion for Tamil, Telugu, Bengali, etc.]
   └── metadata.json
 ```
 
@@ -264,7 +253,7 @@ schemes/
 
 **Responsibilities**:
 - Generate simplified summaries of scheme documents
-- Maintain language consistency across all supported languages
+- Maintain language consistency (Hindi and Marathi in Phase 1)
 - Focus on key benefits, eligibility, and application process
 - Handle summarization errors gracefully
 
@@ -274,9 +263,11 @@ schemes/
 - **External Service**: Amazon Comprehend (for entity extraction), AWS Translate (for language support)
 
 **Implementation Details**:
+- **Note**: Requirements specify Amazon Bedrock (Requirement 4.1), but Bedrock is not available in AWS free tier
+- **Free Tier Alternative**: Use Amazon Comprehend (50K units/month free) for entity extraction combined with rule-based extractive summarization
 - Use Amazon Comprehend for entity extraction and key phrase detection
-- Implement rule-based extractive summarization (no Bedrock due to free tier limits)
-- Use AWS Translate to convert summaries between languages if needed
+- Implement rule-based extractive summarization algorithm
+- Use AWS Translate to convert summaries between Hindi and Marathi if needed
 - Construct summaries by extracting key sentences based on:
   - Scheme name and description
   - Eligibility criteria
@@ -284,6 +275,7 @@ schemes/
   - Application process
 - Limit summary length to 200-300 words for TTS efficiency
 - Implement template-based summarization for consistency
+- **Future Enhancement**: Upgrade to Amazon Bedrock when budget allows for higher-quality abstractive summarization
 
 **Summarization Algorithm**:
 ```
@@ -320,15 +312,11 @@ schemes/
 
 **Implementation Details**:
 - Use AWS Polly SynthesizeSpeech API
-- Select appropriate voices for each language:
+- **Phase 1 (MVP)**: Support Hindi and Marathi voices
   - Hindi: Aditi (female, neural), Kajal (female, standard)
   - Marathi: Use Hindi voice (Aditi) as closest match
-  - Tamil: Use standard voice available in Polly
-  - Telugu: Use standard voice available in Polly
-  - Bengali: Use standard voice available in Polly
-  - Kannada: Use standard voice available in Polly
-  - Malayalam: Use standard voice available in Polly
-  - Gujarati: Use standard voice available in Polly
+- **Phase 2 (Future)**: Expand to additional language voices
+  - Tamil, Telugu, Bengali, Kannada, Malayalam, Gujarati voices
   - Punjabi: Use Hindi voice as fallback
   - Odia: Use Bengali voice as fallback
   - Assamese: Use Bengali voice as fallback
@@ -441,7 +429,7 @@ Billing Mode: On-Demand (within free tier limits)
 {
   "audio": "base64_encoded_audio_data",
   "user_id": "string",
-  "language_preference": "hi-IN | mr-IN | ta-IN | te-IN | bn-IN | kn-IN | ml-IN | gu-IN | pa-IN | or-IN | as-IN | auto",
+  "language_preference": "hi-IN | mr-IN | auto",
   "session_id": "string",
   "metadata": {
     "device_type": "string",
@@ -457,7 +445,7 @@ Billing Mode: On-Demand (within free tier limits)
   "status": "success | error",
   "audio": "base64_encoded_audio_data",
   "text_summary": "string",
-  "language": "hi-IN | mr-IN | ta-IN | te-IN | bn-IN | kn-IN | ml-IN | gu-IN | pa-IN | or-IN | as-IN",
+  "language": "hi-IN | mr-IN",
   "schemes_found": ["string"],
   "cached": "boolean",
   "error": {
@@ -475,68 +463,23 @@ Billing Mode: On-Demand (within free tier limits)
   "scheme_name": {
     "hindi": "string",
     "marathi": "string",
-    "tamil": "string",
-    "telugu": "string",
-    "bengali": "string",
-    "kannada": "string",
-    "malayalam": "string",
-    "gujarati": "string",
-    "punjabi": "string",
-    "odia": "string",
-    "assamese": "string",
     "english": "string"
   },
   "description": {
     "hindi": "string",
-    "marathi": "string",
-    "tamil": "string",
-    "telugu": "string",
-    "bengali": "string",
-    "kannada": "string",
-    "malayalam": "string",
-    "gujarati": "string",
-    "punjabi": "string",
-    "odia": "string",
-    "assamese": "string"
+    "marathi": "string"
   },
   "eligibility": {
     "hindi": ["string"],
-    "marathi": ["string"],
-    "tamil": ["string"],
-    "telugu": ["string"],
-    "bengali": ["string"],
-    "kannada": ["string"],
-    "malayalam": ["string"],
-    "gujarati": ["string"],
-    "punjabi": ["string"],
-    "odia": ["string"],
-    "assamese": ["string"]
+    "marathi": ["string"]
   },
   "benefits": {
     "hindi": ["string"],
-    "marathi": ["string"],
-    "tamil": ["string"],
-    "telugu": ["string"],
-    "bengali": ["string"],
-    "kannada": ["string"],
-    "malayalam": ["string"],
-    "gujarati": ["string"],
-    "punjabi": ["string"],
-    "odia": ["string"],
-    "assamese": ["string"]
+    "marathi": ["string"]
   },
   "application_process": {
     "hindi": "string",
-    "marathi": "string",
-    "tamil": "string",
-    "telugu": "string",
-    "bengali": "string",
-    "kannada": "string",
-    "malayalam": "string",
-    "gujarati": "string",
-    "punjabi": "string",
-    "odia": "string",
-    "assamese": "string"
+    "marathi": "string"
   },
   "keywords": ["string"],
   "category": "string",
@@ -552,7 +495,7 @@ Billing Mode: On-Demand (within free tier limits)
   "timestamp": "ISO8601 timestamp",
   "query_text": "string",
   "response_text": "string",
-  "language": "hi-IN | mr-IN | ta-IN | te-IN | bn-IN | kn-IN | ml-IN | gu-IN | pa-IN | or-IN | as-IN",
+  "language": "hi-IN | mr-IN",
   "session_id": "string",
   "schemes_retrieved": ["string"],
   "cached": "boolean",
@@ -1133,11 +1076,13 @@ A property is a characteristic or behavior that should hold true across all vali
 
 **Validates: Requirements 3.1, 3.2, 3.3**
 
-### Property 8: Bedrock Invocation for Summarization
+### Property 8: AI Summarization Invocation
 
-*For any* set of retrieved scheme documents, the AI Summarizer should invoke Amazon Bedrock to generate a summary.
+*For any* set of retrieved scheme documents, the AI Summarizer should process them to generate a summary using Amazon Comprehend for entity extraction combined with rule-based extractive summarization.
 
 **Validates: Requirements 4.1**
+
+**Note**: Requirement 4.1 specifies Amazon Bedrock, but this design uses Amazon Comprehend (free tier) as a cost-effective alternative. The property validates that AI-powered summarization occurs, regardless of the specific service used.
 
 ### Property 9: Summary Language Consistency
 
@@ -1270,8 +1215,9 @@ Both approaches are complementary and necessary. Unit tests catch concrete bugs 
 **End-to-End Tests**:
 - Test complete flow from audio input to audio output
 - Use real AWS services in test environment (within free tier limits)
-- Verify language consistency across pipeline for all 11 languages
-- Test with actual audio samples in Hindi, Marathi, Tamil, Telugu, Bengali, Kannada, Malayalam, Gujarati, Punjabi, Odia, and Assamese
+- **Phase 1**: Verify language consistency across pipeline for Hindi and Marathi
+- **Phase 2**: Expand testing to additional languages (Tamil, Telugu, Bengali, Kannada, Malayalam, Gujarati, Punjabi, Odia, Assamese)
+- Test with actual audio samples in Hindi and Marathi
 - Test cache hit and cache miss scenarios
 
 **Performance Tests**:
@@ -1289,21 +1235,22 @@ Both approaches are complementary and necessary. Unit tests catch concrete bugs 
 ### Test Data
 
 **Audio Samples**:
-- Collect diverse voice samples in all 11 supported languages
+- Collect diverse voice samples in Hindi and Marathi (Phase 1)
 - Include various accents and speaking speeds
 - Include low-quality audio for error testing
 - Test with different audio formats (MP3, WAV, AAC)
+- **Phase 2**: Expand to additional language audio samples
 
 **Scheme Documents**:
-- Create test scheme documents in all 11 languages
+- Create test scheme documents in Hindi and Marathi
 - Include edge cases (very long, very short, missing fields)
 - Test with real government scheme data
 
 **Mock Services**:
-- Mock AWS Transcribe responses for all languages
+- Mock AWS Transcribe responses for Hindi and Marathi
 - Mock Amazon Comprehend responses
-- Mock AWS Translate responses for all language pairs
-- Mock AWS Polly responses for all languages
+- Mock AWS Translate responses for Hindi-Marathi language pairs
+- Mock AWS Polly responses for Hindi and Marathi
 - Use LocalStack for local AWS service testing
 
 ### Cache Testing
@@ -1329,6 +1276,21 @@ Both approaches are complementary and necessary. Unit tests catch concrete bugs 
 
 ## Future Enhancements
 
+### Language Expansion Roadmap
+
+**Phase 1 (MVP - Current Requirements)**:
+- Hindi and Marathi support as specified in requirements
+- Core functionality within AWS free tier
+
+**Phase 2 (Language Expansion)**:
+- Add support for 9 additional Indian languages:
+  - Tamil, Telugu, Bengali (major South and East Indian languages)
+  - Kannada, Malayalam (South Indian languages)
+  - Gujarati, Punjabi (West and North Indian languages)
+  - Odia, Assamese (East Indian languages)
+- Requires minimal code changes (architecture already supports multi-language)
+- Main effort: Translating scheme documents and testing
+
 ### Phase 2 Features (Within Free Tier)
 
 1. **Enhanced Caching**:
@@ -1353,29 +1315,41 @@ Both approaches are complementary and necessary. Unit tests catch concrete bugs 
 
 ### Phase 3 Features (Requires Paid Tier)
 
-1. **Additional Languages**:
-   - Support for more Indian regional languages beyond the initial 11
+1. **Amazon Bedrock Integration**:
+   - Upgrade from Amazon Comprehend to Amazon Bedrock as specified in Requirement 4.1
+   - Use Claude or Titan for higher-quality abstractive summarization
+   - Implement conversational AI for follow-up questions
+   - Generate personalized recommendations
+   - Multi-turn dialogue support
+
+2. **Additional Languages Beyond Phase 2**:
+   2. **Additional Languages Beyond Phase 2**:
+   - Support for more Indian regional languages beyond the 11 planned
    - Automatic language detection without user specification
    - Dialect support within languages
 
-2. **Personalization**:
+3. **Personalization**:
+   3. **Personalization**:
    - User profiles with saved preferences
    - Personalized scheme recommendations based on demographics
    - Conversation history for context-aware responses
 
-3. **Advanced Search**:
+4. **Advanced Search**:
+   4. **Advanced Search**:
    - Semantic search using vector embeddings
    - Multi-turn conversations for clarification
    - Follow-up questions without repeating context
 
-4. **Multi-Modal Interface**:
+5. **Multi-Modal Interface**:
+   5. **Multi-Modal Interface**:
    - Support for text input in addition to voice
    - Visual display of scheme information with images
    - Video tutorials for scheme applications
 
-5. **Better AI**:
+6. **Better AI** (Upgrade from Comprehend to Bedrock):
+   6. **Better AI** (Upgrade from Comprehend to Bedrock):
    - Fine-tuned models on government scheme data
-   - Use Amazon Bedrock for better summarization quality
+   - Use Amazon Bedrock for better summarization quality (as specified in Requirement 4.1)
    - Implement fact-checking to prevent hallucinations
 
 ### Infrastructure Enhancements (Paid Tier)
@@ -1435,7 +1409,8 @@ Both approaches are complementary and necessary. Unit tests catch concrete bugs 
 
 ### AI Enhancements (Paid Tier)
 
-1. **Amazon Bedrock Integration**:
+1. **Amazon Bedrock Integration** (Fulfills Requirement 4.1):
+   - Upgrade from Amazon Comprehend to Amazon Bedrock
    - Use Claude or Titan for better summarization
    - Implement conversational AI for follow-up questions
    - Generate personalized recommendations
